@@ -1,0 +1,33 @@
+.bg-main {
+  background-color: #0a1628 !important;
+}
+.bg-card {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+}
+.text-primary-accent {
+  color: #2563eb !important;
+}
+.text-muted {
+  color: #9ca3af !important;
+}
+.text-heading {
+  color: #ffffff !important;
+}
+.btn-gradient {
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-secondary-custom {
+  background: transparent !important;
+  color: #fff !important;
+  border: 1px solid #374151 !important;
+}
+.card-gradient {
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;
+  color: #fff !important;
+}
+.border-subtle {
+  border-color: rgba(255,255,255,0.1) !important;
+}
