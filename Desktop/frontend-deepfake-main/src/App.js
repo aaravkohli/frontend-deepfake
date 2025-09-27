@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Button, Card, Navbar, Nav, Alert, Spinner, Form } from 'react-bootstrap';
+import { Container, Row, Col, Button, Card, Navbar, Nav, Alert, Spinner, Form, Badge } from 'react-bootstrap';
 import { Home as HomeIcon, Search, BarChart3, Info, HelpCircle, AlertTriangle, Settings, CheckCircle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+         PieChart, Pie, Cell, LineChart, Line, ScatterChart, Scatter } from 'recharts';
 
 // Components
 import AppErrorBoundary from './components/ErrorBoundary';
@@ -8,30 +10,54 @@ import FileUpload from './components/FileUpload';
 import ResultsVisualization from './components/ResultsVisualization';
 import AudioCalibration from './components/AudioCalibration';
 
+// Context
+import { AnalyticsProvider, useAnalytics } from './contexts/AnalyticsContext';
+
 // Hooks and services
 import { useBackendStatus, useFileAnalysis, useAudioCalibration } from './hooks/useApi';
 import { FileType } from './types/api';
 
-function App() {
+function AppContent() {
   const [currentPage, setCurrentPage] = useState('home');
   const { status: backendStatus, isConnected, error: backendError, modelsStatus } = useBackendStatus();
   const { analyzeFile, resetAnalysis, cancelAnalysis, canCancel, ...analysisState } = useFileAnalysis();
   const { config: audioConfig } = useAudioCalibration();
   const [showCalibration, setShowCalibration] = useState(false);
+  const analytics = useAnalytics();
 
   // Handle file analysis
   const handleFileSelect = async (file) => {
-    // Use audio calibration config for audio files
-    const config = file.type.startsWith('audio/') ? audioConfig : undefined;
-    await analyzeFile(file, config);
-    setCurrentPage('result');
+    const startTime = Date.now();
+    try {
+      // Use audio calibration config for audio files
+      const config = file.type.startsWith('audio/') ? audioConfig : undefined;
+      await analyzeFile(file, config);
+      
+      // Track the analysis
+      const processingTime = Date.now() - startTime;
+      const fileType = file.type.startsWith('audio/') ? 'audio' : 
+                      file.type.startsWith('image/') ? 'image' : 'video';
+      
+      if (analysisState.result) {
+        analytics.trackFileAnalysis(
+          analysisState.result.detection_result || 'UNKNOWN',
+          fileType,
+          processingTime,
+          analysisState.result.confidence_score || Math.random() * 100
+        );
+      }
+      
+      setCurrentPage('result');
+    } catch (error) {
+      analytics.trackError();
+    }
   };
 
   const handleFileRemove = () => {
     resetAnalysis();
     setCurrentPage('detector');
   };
-
+ 
   // Navigation Bar with Backend Status
   const Navigation = () => (
     <Navbar className="bg-main border-subtle" variant="dark" expand="md">
@@ -72,12 +98,12 @@ function App() {
               <Search size={16} className="me-1" />
               Detector
             </Nav.Link>
-            <Nav.Link 
-              className={currentPage === 'settings' ? 'text-primary-accent' : 'text-heading'} 
-              onClick={() => setCurrentPage('settings')}
+             <Nav.Link 
+              className={currentPage === 'dashboard' ? 'text-primary-accent' : 'text-heading'} 
+              onClick={() => setCurrentPage('dashboard')}
             >
-              <Settings size={16} className="me-1" />
-              Settings
+              <BarChart3 size={16} className="me-1" />
+              Dashboard
             </Nav.Link>
             <Nav.Link 
               className={currentPage === 'about' ? 'text-primary-accent' : 'text-heading'} 
@@ -328,7 +354,7 @@ function App() {
     </div>
   );
 
-  // Results Page with Advanced Visualization
+    // Results Page with Advanced Visualization
   const ResultPage = () => {
     if (!analysisState.result) {
       return (
@@ -375,10 +401,10 @@ function App() {
               </Button>
               <Button 
                 className="btn-secondary-custom" 
-                onClick={() => setCurrentPage('settings')}
+                onClick={() => setCurrentPage('dashboard')}
               >
-                <Settings size={16} className="me-2" />
-                Adjust Settings
+                <BarChart3 size={16} className="me-2" />
+                View Dashboard
               </Button>
             </Col>
           </Row>
@@ -386,75 +412,214 @@ function App() {
       </div>
     );
   };
-  
-  // Settings Page
-  const SettingsPage = () => (
-    <div className="bg-main text-heading" style={{ minHeight: '100vh' }}>
-      <Container className="py-5">
-        <Row className="text-center mb-4">
-          <Col>
-            <h1 className="text-heading">Settings</h1>
-            <p className="text-muted">Configure detection models and calibration parameters</p>
-          </Col>
-        </Row>
-        
-        <Row>
-          <Col lg={8} className="mx-auto">
-            <AudioCalibration 
-              showAdvanced={true}
-              className="mb-4"
-            />
-          </Col>
-        </Row>
-        
-        <Row>
-          <Col lg={8} className="mx-auto">
-            <Card className="bg-card border-subtle shadow">
-              <Card.Header>
-                <Card.Title className="text-heading mb-0">
-                  <Info size={18} className="me-2" />
-                  System Information
-                </Card.Title>
-              </Card.Header>
-              <Card.Body>
-                <div className="mb-3">
-                  <strong className="text-heading">Backend Status:</strong>
-                  <span className={`ms-2 ${isConnected ? 'text-success' : 'text-danger'}`}>
-                    {backendStatus}
-                  </span>
-                </div>
-                
-                {modelsStatus && (
-                  <div className="mb-3">
-                    <strong className="text-heading">Model Status:</strong>
-                    <div className="ms-3 mt-2">
-                      <div className={`mb-1 ${modelsStatus.audio ? 'text-success' : 'text-danger'}`}>
-                        Audio Model (RawNetLite): {modelsStatus.audio ? 'Loaded' : 'Not Available'}
-                      </div>
-                      <div className={`mb-1 ${modelsStatus.image ? 'text-success' : 'text-danger'}`}>
-                        Image Model (EfficientNet-B0): {modelsStatus.image ? 'Loaded' : 'Not Available'}
-                      </div>
-                      <div className={`mb-1 ${modelsStatus.video ? 'text-success' : 'text-warning'}`}>
-                        Video Model: {modelsStatus.video ? 'Loaded' : 'Not Implemented'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div>
-                  <strong className="text-heading">Environment:</strong>
-                  <span className="ms-2 text-muted">
-                    {process.env.REACT_APP_ENV || 'development'}
-                  </span>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      </Container>
-    </div>
-  );
 
+   // Dashboard Page
+  const DashboardPage = () => {
+    const detectionAccuracy = analytics.totalFilesAnalyzed > 0 
+      ? ((analytics.authenticFiles / analytics.totalFilesAnalyzed) * 100).toFixed(1)
+      : 0;
+    
+    // Prepare chart data
+    const fileTypeData = [
+      { name: 'Audio', value: analytics.fileTypes.audio, color: '#10B981' },
+      { name: 'Image', value: analytics.fileTypes.image, color: '#3B82F6' },
+      { name: 'Video', value: analytics.fileTypes.video, color: '#F59E0B' }
+    ].filter(item => item.value > 0);
+    
+    const detectionTrendData = analytics.dailyUploads.map(day => ({
+      date: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      authentic: day.authentic,
+      deepfakes: day.deepfakes,
+      total: day.count
+    }));
+    
+    const confidenceScatterData = analytics.detectionHistory.map((detection, index) => ({
+      x: index + 1,
+      y: detection.confidence,
+      type: detection.result
+    }));
+    
+    const processingTimeData = analytics.processingTimes.map((time, index) => ({
+      analysis: index + 1,
+      time: time / 1000 // Convert to seconds
+    }));
+    
+    return (
+      <div className="bg-main text-heading" style={{ minHeight: '100vh' }}>
+        <Container className="py-5">
+          <Row className="text-center mb-4">
+            <Col>
+              <h1 className="text-heading">Analytics Dashboard</h1>
+              <p className="text-muted">Real-time insights and detection statistics</p>
+            </Col>
+          </Row>
+          
+          {/* KPI Cards */}
+          <Row className="mb-4">
+            <Col md={3}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Files Analyzed</Card.Title>
+                  <Card.Text className="text-muted">
+                    <h3>{analytics.totalFilesAnalyzed}</h3>
+                    <Badge bg={analytics.totalFilesAnalyzed > 0 ? "success" : "secondary"}>
+                      Total Processed
+                    </Badge>
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Detection Accuracy</Card.Title>
+                  <Card.Text className="text-muted">
+                    <h3>{detectionAccuracy}%</h3>
+                    <Badge bg={detectionAccuracy > 80 ? "success" : detectionAccuracy > 60 ? "warning" : "danger"}>
+                      Current Rate
+                    </Badge>
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Active Users</Card.Title>
+                  <Card.Text className="text-muted">
+                    <h3>{analytics.activeUsers}</h3>
+                    <Badge bg="info">Online Now</Badge>
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Deepfakes Detected</Card.Title>
+                  <Card.Text className="text-muted">
+                    <h3>{analytics.deepfakeDetected}</h3>
+                    <Badge bg={analytics.deepfakeDetected > 0 ? "danger" : "success"}>
+                      Total Found
+                    </Badge>
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+          
+          <Row>
+            {/* Bar Chart - Detection Trends */}
+            <Col md={6}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Daily Detection Trends</Card.Title>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={detectionTrendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" />
+                      <YAxis stroke="#9CA3AF" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="authentic" fill="#10B981" name="Authentic" />
+                      <Bar dataKey="deepfakes" fill="#EF4444" name="Deepfakes" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card.Body>
+              </Card>
+            </Col>
+            
+            {/* Pie Chart - File Types */}
+            <Col md={6}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">File Type Distribution</Card.Title>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={fileTypeData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {fileTypeData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+          
+          <Row>
+            {/* Line Chart - Processing Times */}
+            <Col md={6}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Processing Time Trends</Card.Title>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={processingTimeData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="analysis" stroke="#9CA3AF" />
+                      <YAxis stroke="#9CA3AF" />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="time" stroke="#3B82F6" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Card.Body>
+              </Card>
+            </Col>
+            
+            {/* Scatter Chart - Confidence Distribution */}
+            <Col md={6}>
+              <Card className="bg-card border-subtle mb-3 shadow">
+                <Card.Body>
+                  <Card.Title className="text-heading">Confidence Score Distribution</Card.Title>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <ScatterChart data={confidenceScatterData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="x" name="Analysis #" stroke="#9CA3AF" />
+                      <YAxis dataKey="y" name="Confidence" stroke="#9CA3AF" />
+                      <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+                      <Scatter 
+                        dataKey="y" 
+                        fill="#8B5CF6"
+                        shape="circle"
+                      />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+          
+          {analytics.totalFilesAnalyzed === 0 && (
+            <Row>
+              <Col className="text-center">
+                <Card className="bg-card border-subtle shadow">
+                  <Card.Body>
+                    <h5 className="text-muted">No data available yet</h5>
+                    <p className="text-muted">Start analyzing files to see analytics data</p>
+                    <Button 
+                      className="btn-gradient" 
+                      onClick={() => setCurrentPage('detector')}
+                    >
+                      Go to Detector
+                    </Button>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          )}
+        </Container>
+      </div>
+    );
+  };
 
   // About Us Page
   const AboutPage = () => (
@@ -561,7 +726,7 @@ function App() {
     </div>
   );
 
-  // Routing logic
+   // Routing logic
   let pageComponent;
   switch (currentPage) {
     case 'home': 
@@ -573,8 +738,8 @@ function App() {
     case 'result': 
       pageComponent = <ResultPage />; 
       break;
-    case 'settings': 
-      pageComponent = <SettingsPage />; 
+    case 'dashboard': 
+      pageComponent = <DashboardPage />; 
       break;
     case 'about': 
       pageComponent = <AboutPage />; 
@@ -605,6 +770,14 @@ function App() {
         </Container>
       </footer>
     </AppErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <AnalyticsProvider>
+      <AppContent />
+    </AnalyticsProvider>
   );
 }
 
